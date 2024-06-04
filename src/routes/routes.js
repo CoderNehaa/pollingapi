@@ -17,5 +17,3 @@ router.delete('/api/options/:optionId', optionController.deleteOption);
 router.get('/api/options/:optionId/add-vote', optionController.addVotes);
 
 export default router;
-
-

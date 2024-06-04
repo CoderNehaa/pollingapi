@@ -3,6 +3,11 @@ import { ObjectId } from "mongodb";
 import { OptionModel } from "../models/option.model.js";
 
 export class OptionController {
+    constructor(){
+        this.findQuestionByOptionId = this.findQuestionByOptionId.bind(this)
+        this.addVotes = this.addVotes.bind(this)
+    }
+
     async addOption(req, res) {
         try {
             const { questionId } = req.params;
@@ -49,25 +54,54 @@ export class OptionController {
             res.status(503).send("Error occurred while getting options");
         }
     }
+
+    async findQuestionByOptionId(id){
+        const db = await connectDB();
+        const objectId = new ObjectId(id);
+        
+        const option = await db.collection('options').findOne({_id : objectId});
+        const questionId = option.question;
+
+        const quesObjId = new ObjectId(questionId);
+        const question = await db.collection('questions').findOne({_id:quesObjId});
+
+        return question
+
+    }
     
     async addVotes(req, res) {
         try {
             const { optionId } = req.params;
             const objectId = new ObjectId(optionId);
-
+    
             const db = await connectDB();
             await db.collection('options').updateOne(
                 { _id: objectId },
                 { $inc: { votes: 1 } }
             );
-
+    
+            const question = await this.findQuestionByOptionId(optionId);
+            
+            if (question) {
+                question.options.forEach(option => {
+                    if (option._id.equals(objectId)) {
+                        option.votes += 1;
+                    }
+                });
+    
+                await db.collection('questions').updateOne(
+                    { _id: question._id },
+                    { $set: { options: question.options } }
+                );
+            }
+    
             res.status(200).send("Vote added");
         } catch (e) {
             console.log(e);
             res.status(503).send("Error occurred while adding vote");
         }
     }
-
+    
     async deleteOption(req, res) {
         try {
             const { optionId } = req.params;
@@ -80,7 +114,12 @@ export class OptionController {
             if (!option) {
                 return res.status(404).send("Option not found");
             }
-    
+            
+            // 
+            if(option.votes > 0){
+                return res.status(400).send("Option with vote cannot be deleted");
+            }
+
             const questionId = option.question;
             const quesObjId = new ObjectId(questionId);
             const question = await db.collection('questions').findOne({ _id: quesObjId });
@@ -103,7 +142,7 @@ export class OptionController {
             console.log(e);
             res.status(500).send("Internal Server Error");
         }
-    }
-    
+    }    
         
 }
+
